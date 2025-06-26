@@ -93,3 +93,27 @@ Consider caching transformed images to improve performance.
 Implement error handling and validation for all endpoints.
 Optionally use a message queue like RabbitMQ or Kafka to process image transformations asynchronously.
 This project will help you understand how to build a scalable image processing service with user authentication and image transformation capabilities. You can use this project to showcase your backend development skills and learn about image processing techniques.
+
+## Local Development
+
+### Backend
+1. Navigate to `backend/image-service` and build using Maven:
+   ```bash
+   mvn package
+   ```
+2. Run the application:
+   ```bash
+   mvn spring-boot:run
+   ```
+
+The backend uses MySQL for persistence (configure credentials in `application.properties`) and AWS S3 for storing uploaded images.
+
+### Frontend
+1. Navigate to `frontend` and install dependencies:
+   ```bash
+   npm install
+   ```
+2. Start the frontend (uses a minimal development server):
+   ```bash
+   npm start
+   ```
