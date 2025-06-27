@@ -1,32 +1,62 @@
-import React, { useState } from 'react';
-import axios from 'axios';
+import React, { useState, useEffect } from 'react';
+import Login from './components/Login';
+import Register from './components/Register';
+import Dashboard from './components/Dashboard';
 
 function App() {
   const [token, setToken] = useState('');
-  const [file, setFile] = useState(null);
-  const [credentials, setCredentials] = useState({ username: '', password: '' });
+  const [isRegistering, setIsRegistering] = useState(false);
 
-  const login = async () => {
-    const res = await axios.post('/login', credentials);
-    setToken(res.data);
+  useEffect(() => {
+    const savedToken = localStorage.getItem('token');
+    if (savedToken) {
+      setToken(savedToken);
+    }
+  }, []);
+
+  const handleLogin = (newToken) => {
+    setToken(newToken);
   };
 
-  const upload = async () => {
-    const form = new FormData();
-    form.append('file', file);
-    const res = await axios.post('/images', form, { headers: { Authorization: `Bearer ${token}` } });
-    alert(res.data);
+  const handleRegister = (newToken) => {
+    setToken(newToken);
+    setIsRegistering(false);
+  };
+
+  const handleLogout = () => {
+    setToken('');
+  };
+
+  const switchToRegister = () => {
+    setIsRegistering(true);
+  };
+
+  const switchToLogin = () => {
+    setIsRegistering(false);
   };
 
   return (
-    <div>
-      <h1>Image Service</h1>
-      <input placeholder="username" onChange={e => setCredentials({ ...credentials, username: e.target.value })} />
-      <input type="password" placeholder="password" onChange={e => setCredentials({ ...credentials, password: e.target.value })} />
-      <button onClick={login}>Login</button>
-      <br />
-      <input type="file" onChange={e => setFile(e.target.files[0])} />
-      <button onClick={upload}>Upload</button>
+    <div style={{ padding: '20px', maxWidth: '800px', margin: '0 auto' }}>
+      <h1>Image Processing Service</h1>
+      
+      {!token ? (
+        isRegistering ? (
+          <Register 
+            onRegister={handleRegister} 
+            onSwitchToLogin={switchToLogin} 
+          />
+        ) : (
+          <Login 
+            onLogin={handleLogin} 
+            onSwitchToRegister={switchToRegister} 
+          />
+        )
+      ) : (
+        <Dashboard 
+          token={token} 
+          onLogout={handleLogout} 
+        />
+      )}
     </div>
   );
 }
