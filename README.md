@@ -25,3 +25,14 @@ The backend uses MySQL for persistence (configure credentials in `application.pr
    ```bash
    npm start
    ```
+
+
+### Screenshots
+
+<img width="1210" alt="Screenshot 2025-06-28 at 8 44 21 AM" src="https://github.com/user-attachments/assets/33b2401f-4d01-41a9-905c-6b905e0e6f18" />
+<img width="1288" alt="Screenshot 2025-06-28 at 8 44 27 AM" src="https://github.com/user-attachments/assets/fe30685a-c713-41b5-897d-ea31c63d7347" />
+<img width="1437" alt="Screenshot 2025-06-28 at 8 45 02 AM" src="https://github.com/user-attachments/assets/cb26160e-1e15-4864-9805-5c874d2ad6b4" />
+
+
+
+
