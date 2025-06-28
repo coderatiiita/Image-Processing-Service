@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import axios from 'axios';
+import api from '../config/api';
 
 function ImageTransform({ image, token, onClose, onTransformed }) {
   const [transformations, setTransformations] = useState({
@@ -76,7 +76,7 @@ function ImageTransform({ image, token, onClose, onTransformed }) {
         cleanTransformations.filters = enabledFilters;
       }
 
-      const response = await axios.post(
+      const response = await api.post(
         `/images/${image.id}/transform`,
         { transformations: cleanTransformations },
         { headers: { Authorization: `Bearer ${token}` } }
@@ -106,7 +106,7 @@ function ImageTransform({ image, token, onClose, onTransformed }) {
 
   const handleDownloadTransformedImage = async (transformedImageData) => {
     try {
-      const response = await axios.get(`/images/transformed-images/${transformedImageData.transformedImageId}/download-url`, {
+      const response = await api.get(`/images/transformed-images/${transformedImageData.transformedImageId}/download-url`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       

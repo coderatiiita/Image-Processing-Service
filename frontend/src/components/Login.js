@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import axios from 'axios';
+import api from '../config/api';
 
 function Login({ onLogin, onSwitchToRegister }) {
   const [credentials, setCredentials] = useState({ username: '', password: '' });
@@ -14,7 +14,7 @@ function Login({ onLogin, onSwitchToRegister }) {
 
     setLoading(true);
     try {
-      const res = await axios.post('/login', credentials);
+      const res = await api.post('/login', credentials);
       localStorage.setItem('token', res.data);
       setMessage('Login successful!');
       onLogin(res.data);

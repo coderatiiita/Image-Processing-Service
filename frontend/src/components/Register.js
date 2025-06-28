@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import axios from 'axios';
+import api from '../config/api';
 
 function Register({ onRegister, onSwitchToLogin }) {
   const [credentials, setCredentials] = useState({ username: '', password: '' });
@@ -25,7 +25,7 @@ function Register({ onRegister, onSwitchToLogin }) {
 
     setLoading(true);
     try {
-      const res = await axios.post('/register', credentials);
+      const res = await api.post('/register', credentials);
       localStorage.setItem('token', res.data);
       setMessage('Registration successful!');
       onRegister(res.data);

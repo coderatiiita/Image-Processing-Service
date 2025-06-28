@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../config/api';
 import ImageTransform from './ImageTransform';
 
 function Dashboard({ token, onLogout }) {
@@ -22,7 +22,7 @@ function Dashboard({ token, onLogout }) {
   const loadImages = async () => {
     setLoadingImages(true);
     try {
-      const res = await axios.get('/images', { 
+      const res = await api.get('/images', { 
         headers: { Authorization: `Bearer ${token}` } 
       });
       setImages(res.data);
@@ -36,7 +36,7 @@ function Dashboard({ token, onLogout }) {
 
   const loadTransformedImages = async () => {
     try {
-      const res = await axios.get('/images/transformed-images', { 
+      const res = await api.get('/images/transformed-images', { 
         headers: { Authorization: `Bearer ${token}` } 
       });
       setTransformedImages(res.data);
@@ -57,7 +57,7 @@ function Dashboard({ token, onLogout }) {
     
     try {
       // Step 1: Get pre-signed upload URL
-      const uploadUrlResponse = await axios.post('/images/upload-url', {
+      const uploadUrlResponse = await api.post('/images/upload-url', {
         filename: file.name,
         contentType: file.type
       }, { 
@@ -68,7 +68,7 @@ function Dashboard({ token, onLogout }) {
       setUploadProgress(25);
 
       // Step 2: Upload directly to S3 using pre-signed URL
-      await axios.put(uploadUrl, file, {
+      await api.put(uploadUrl, file, {
         headers: {
           'Content-Type': file.type
         },
@@ -81,7 +81,7 @@ function Dashboard({ token, onLogout }) {
       setUploadProgress(75);
 
       // Step 3: Save metadata to our backend
-      const metadataResponse = await axios.post('/images/save-metadata', {
+      const metadataResponse = await api.post('/images/save-metadata', {
         filename: filename,
         originalName: file.name,
         contentType: file.type,
@@ -125,7 +125,7 @@ function Dashboard({ token, onLogout }) {
   const handleDownloadImage = async (image) => {
     setDownloadingImage(image.id);
     try {
-      const response = await axios.get(`/images/${image.id}/download-url`, {
+      const response = await api.get(`/images/${image.id}/download-url`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
@@ -151,7 +151,7 @@ function Dashboard({ token, onLogout }) {
 
     setDeletingImage(image.id);
     try {
-      await axios.delete(`/images/${image.id}`, {
+      await api.delete(`/images/${image.id}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setMessage('Image deleted successfully!');
@@ -167,7 +167,7 @@ function Dashboard({ token, onLogout }) {
   const handleDownloadTransformedImage = async (transformedImage) => {
     setDownloadingImage(transformedImage.id);
     try {
-      const response = await axios.get(`/images/transformed-images/${transformedImage.id}/download-url`, {
+      const response = await api.get(`/images/transformed-images/${transformedImage.id}/download-url`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
@@ -193,7 +193,7 @@ function Dashboard({ token, onLogout }) {
 
     setDeletingImage(transformedImage.id);
     try {
-      await axios.delete(`/images/transformed-images/${transformedImage.id}`, {
+      await api.delete(`/images/transformed-images/${transformedImage.id}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setMessage('Transformed image deleted successfully!');
