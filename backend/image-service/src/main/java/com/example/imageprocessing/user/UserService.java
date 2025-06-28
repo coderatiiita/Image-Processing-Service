@@ -17,13 +17,18 @@ public class UserService {
     }
 
     public String register(User user) {
+        // Check if user already exists (use findFirstByUsername to handle existing duplicates)
+        if (repository.findFirstByUsername(user.getUsername()).isPresent()) {
+            throw new RuntimeException("Username already exists");
+        }
+        
         user.setPassword(encoder.encode(user.getPassword()));
         repository.save(user);
         return jwtUtil.generateToken(user.getUsername());
     }
 
     public String login(String username, String password) {
-        return repository.findByUsername(username)
+        return repository.findFirstByUsername(username)
                 .filter(u -> encoder.matches(password, u.getPassword()))
                 .map(u -> jwtUtil.generateToken(u.getUsername()))
                 .orElseThrow();

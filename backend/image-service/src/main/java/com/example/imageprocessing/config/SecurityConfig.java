@@ -24,7 +24,7 @@ public class SecurityConfig {
             .sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS)
             .and()
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/register", "/login").permitAll()
+                .requestMatchers("/register", "/login", "/images/config").permitAll()
                 .anyRequest().authenticated()
             );
         http.addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);

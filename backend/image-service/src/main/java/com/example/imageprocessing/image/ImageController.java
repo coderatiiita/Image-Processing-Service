@@ -14,9 +14,14 @@ import java.util.List;
 @RequestMapping("/images")
 public class ImageController {
     private final ImageService service;
+    private final ImageTransformationService transformationService;
+    private final TransformedImageService transformedImageService;
 
-    public ImageController(ImageService service) {
+    public ImageController(ImageService service, ImageTransformationService transformationService, 
+                          TransformedImageService transformedImageService) {
         this.service = service;
+        this.transformationService = transformationService;
+        this.transformedImageService = transformedImageService;
     }
 
     @PostMapping
@@ -36,13 +41,13 @@ public class ImageController {
             Pageable pageable = PageRequest.of(page, limit);
             Page<Image> imagePage = service.getUserImages(auth.getName(), pageable);
             List<ImageResponse> responses = imagePage.getContent().stream()
-                    .map(ImageResponse::new)
+                    .map(image -> new ImageResponse(image, service, auth.getName()))
                     .toList();
             return ResponseEntity.ok(responses);
         } else {
             List<Image> images = service.getUserImages(auth.getName());
             List<ImageResponse> responses = images.stream()
-                    .map(ImageResponse::new)
+                    .map(image -> new ImageResponse(image, service, auth.getName()))
                     .toList();
             return ResponseEntity.ok(responses);
         }
@@ -51,19 +56,72 @@ public class ImageController {
     @GetMapping("/{id}")
     public ResponseEntity<ImageResponse> getImage(@PathVariable Long id, Authentication auth) {
         return service.getImageById(id, auth.getName())
-                .map(image -> ResponseEntity.ok(new ImageResponse(image)))
+                .map(image -> ResponseEntity.ok(new ImageResponse(image, service, auth.getName())))
                 .orElse(ResponseEntity.notFound().build());
     }
 
     @PostMapping("/{id}/transform")
-    public ResponseEntity<String> transformImage(
+    public ResponseEntity<?> transformImage(
             @PathVariable Long id,
             @RequestBody TransformationRequest request,
             Authentication auth) {
         
-        // For now, return a placeholder response
-        // TODO: Implement actual image transformations
-        return ResponseEntity.ok("Transformation feature coming soon for image ID: " + id);
+        try {
+            // Get the original image and verify user ownership
+            Image originalImage = service.getImageById(id, auth.getName())
+                    .orElseThrow(() -> new RuntimeException("Image not found or access denied"));
+
+            // Convert request to transformation options
+            ImageTransformationService.TransformationOptions options = convertToTransformationOptions(request.getTransformations());
+
+            // Apply transformations
+            TransformedImage result = transformationService.transformImage(originalImage, options, auth.getName());
+
+            // Create response
+            TransformationResponse response = new TransformationResponse();
+            response.setOriginalImageId(result.getOriginalImageId());
+            response.setTransformedImageId(result.getId());
+            response.setTransformedUrl(result.getS3Url());
+            response.setTransformedFilename(result.getTransformedFilename());
+            response.setFileSize(result.getFileSize());
+            response.setTransformations(request.getTransformations());
+
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body("Transformation failed: " + e.getMessage());
+        }
+    }
+
+    private ImageTransformationService.TransformationOptions convertToTransformationOptions(TransformationRequest.TransformationOptions source) {
+        ImageTransformationService.TransformationOptions target = new ImageTransformationService.TransformationOptions();
+        
+        if (source.getResize() != null) {
+            ImageTransformationService.ResizeOptions resize = new ImageTransformationService.ResizeOptions();
+            resize.setWidth(source.getResize().getWidth());
+            resize.setHeight(source.getResize().getHeight());
+            target.setResize(resize);
+        }
+        
+        if (source.getCrop() != null) {
+            ImageTransformationService.CropOptions crop = new ImageTransformationService.CropOptions();
+            crop.setWidth(source.getCrop().getWidth());
+            crop.setHeight(source.getCrop().getHeight());
+            crop.setX(source.getCrop().getX());
+            crop.setY(source.getCrop().getY());
+            target.setCrop(crop);
+        }
+        
+        target.setRotate(source.getRotate());
+        target.setFormat(source.getFormat());
+        
+        if (source.getFilters() != null) {
+            ImageTransformationService.FilterOptions filters = new ImageTransformationService.FilterOptions();
+            filters.setGrayscale(source.getFilters().getGrayscale());
+            filters.setSepia(source.getFilters().getSepia());
+            target.setFilters(filters);
+        }
+        
+        return target;
     }
 
     @PostMapping("/upload-url")
@@ -111,7 +169,89 @@ public class ImageController {
                 request.getFileSize(),
                 auth.getName()
         );
-        return ResponseEntity.ok(new ImageResponse(image));
+        return ResponseEntity.ok(new ImageResponse(image, service, auth.getName()));
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<?> deleteImage(@PathVariable Long id, Authentication auth) {
+        try {
+            service.deleteImage(id, auth.getName());
+            return ResponseEntity.ok().build();
+        } catch (RuntimeException e) {
+            if (e.getMessage().contains("not found") || e.getMessage().contains("access denied")) {
+                return ResponseEntity.notFound().build();
+            }
+            return ResponseEntity.badRequest().body("Failed to delete image: " + e.getMessage());
+        }
+    }
+
+    @GetMapping("/{id}/transformations")
+    public ResponseEntity<List<TransformedImageResponse>> getImageTransformations(
+            @PathVariable Long id,
+            Authentication auth) {
+        
+        try {
+            // Verify user owns the original image
+            if (service.getImageById(id, auth.getName()).isEmpty()) {
+                return ResponseEntity.notFound().build();
+            }
+            
+            List<TransformedImage> transformations = transformedImageService.getTransformationsForImage(id, auth.getName());
+            List<TransformedImageResponse> responses = transformations.stream()
+                    .map(t -> new TransformedImageResponse(t, service, auth.getName()))
+                    .toList();
+            
+            return ResponseEntity.ok(responses);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    @GetMapping("/transformed-images/{id}/download-url")
+    public ResponseEntity<DownloadUrlResponse> generateTransformedImageDownloadUrl(
+            @PathVariable Long id,
+            Authentication auth) {
+        
+        try {
+            String presignedUrl = transformedImageService.generatePresignedDownloadUrlForTransformedImage(id, auth.getName());
+            DownloadUrlResponse response = new DownloadUrlResponse();
+            response.setDownloadUrl(presignedUrl);
+            response.setExpiresIn(3600); // 1 hour in seconds
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            return ResponseEntity.notFound().build();
+        }
+    }
+
+    @GetMapping("/transformed-images")
+    public ResponseEntity<List<TransformedImageResponse>> getAllTransformedImages(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int limit,
+            Authentication auth) {
+        
+        try {
+            List<TransformedImage> transformedImages = transformedImageService.getUserTransformedImages(auth.getName());
+            List<TransformedImageResponse> responses = transformedImages.stream()
+                    .map(t -> new TransformedImageResponse(t, service, auth.getName()))
+                    .toList();
+            
+            return ResponseEntity.ok(responses);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    @DeleteMapping("/transformed-images/{id}")
+    public ResponseEntity<?> deleteTransformedImage(@PathVariable Long id, Authentication auth) {
+        try {
+            transformedImageService.deleteTransformedImage(id, auth.getName());
+            return ResponseEntity.ok().build();
+        } catch (RuntimeException e) {
+            if (e.getMessage().contains("not found") || e.getMessage().contains("access denied")) {
+                return ResponseEntity.notFound().build();
+            }
+            return ResponseEntity.badRequest().body("Failed to delete transformed image: " + e.getMessage());
+        }
     }
 
     @GetMapping("/config")
@@ -137,6 +277,22 @@ public class ImageController {
             this.createdAt = image.getCreatedAt().toString();
         }
 
+        public ImageResponse(Image image, ImageService imageService, String username) {
+            this.id = image.getId();
+            this.name = image.getOriginalName();
+            this.contentType = image.getContentType();
+            this.fileSize = image.getFileSize();
+            this.createdAt = image.getCreatedAt().toString();
+            
+            // Generate pre-signed URL for display
+            try {
+                this.url = imageService.generatePresignedDownloadUrlForImage(image.getId(), username);
+            } catch (Exception e) {
+                // Fallback to direct S3 URL if pre-signed URL generation fails
+                this.url = image.getS3Url();
+            }
+        }
+
         // getters
         public Long getId() { return id; }
         public String getName() { return name; }
@@ -147,10 +303,10 @@ public class ImageController {
     }
 
     public static class TransformationRequest {
-        private TransformationOptions transformations;
+        private TransformationRequest.TransformationOptions transformations;
 
-        public TransformationOptions getTransformations() { return transformations; }
-        public void setTransformations(TransformationOptions transformations) { this.transformations = transformations; }
+        public TransformationRequest.TransformationOptions getTransformations() { return transformations; }
+        public void setTransformations(TransformationRequest.TransformationOptions transformations) { this.transformations = transformations; }
 
         public static class TransformationOptions {
             private ResizeOptions resize;
@@ -243,5 +399,66 @@ public class ImageController {
         public void setContentType(String contentType) { this.contentType = contentType; }
         public Long getFileSize() { return fileSize; }
         public void setFileSize(Long fileSize) { this.fileSize = fileSize; }
+    }
+
+    public static class TransformationResponse {
+        private Long originalImageId;
+        private Long transformedImageId;
+        private String transformedUrl;
+        private String transformedFilename;
+        private Long fileSize;
+        private TransformationRequest.TransformationOptions transformations;
+
+        public Long getOriginalImageId() { return originalImageId; }
+        public void setOriginalImageId(Long originalImageId) { this.originalImageId = originalImageId; }
+        public Long getTransformedImageId() { return transformedImageId; }
+        public void setTransformedImageId(Long transformedImageId) { this.transformedImageId = transformedImageId; }
+        public String getTransformedUrl() { return transformedUrl; }
+        public void setTransformedUrl(String transformedUrl) { this.transformedUrl = transformedUrl; }
+        public String getTransformedFilename() { return transformedFilename; }
+        public void setTransformedFilename(String transformedFilename) { this.transformedFilename = transformedFilename; }
+        public Long getFileSize() { return fileSize; }
+        public void setFileSize(Long fileSize) { this.fileSize = fileSize; }
+        public TransformationRequest.TransformationOptions getTransformations() { return transformations; }
+        public void setTransformations(TransformationRequest.TransformationOptions transformations) { this.transformations = transformations; }
+    }
+
+    public static class TransformedImageResponse {
+        private Long id;
+        private Long originalImageId;
+        private String name;
+        private String url;
+        private String contentType;
+        private Long fileSize;
+        private String transformations;
+        private String createdAt;
+
+        public TransformedImageResponse(TransformedImage transformedImage, ImageService imageService, String username) {
+            this.id = transformedImage.getId();
+            this.originalImageId = transformedImage.getOriginalImageId();
+            this.name = transformedImage.getTransformedFilename();
+            this.contentType = transformedImage.getContentType();
+            this.fileSize = transformedImage.getFileSize();
+            this.transformations = transformedImage.getTransformations();
+            this.createdAt = transformedImage.getCreatedAt().toString();
+            
+            // Generate pre-signed URL for secure display
+            try {
+                this.url = imageService.generatePresignedDownloadUrl(transformedImage.getTransformedFilename());
+            } catch (Exception e) {
+                // Fallback to direct S3 URL if pre-signed URL generation fails
+                this.url = transformedImage.getS3Url();
+            }
+        }
+
+        // Getters
+        public Long getId() { return id; }
+        public Long getOriginalImageId() { return originalImageId; }
+        public String getName() { return name; }
+        public String getUrl() { return url; }
+        public String getContentType() { return contentType; }
+        public Long getFileSize() { return fileSize; }
+        public String getTransformations() { return transformations; }
+        public String getCreatedAt() { return createdAt; }
     }
 }

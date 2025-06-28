@@ -11,11 +11,12 @@ function ImageTransform({ image, token, onClose, onTransformed }) {
   });
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
+  const [transformedImage, setTransformedImage] = useState(null);
 
   const handleTransformationChange = (category, field, value) => {
     setTransformations(prev => ({
       ...prev,
-      [category]: {
+      [category]: field === null ? value : {
         ...prev[category],
         [field]: value
       }
@@ -81,8 +82,9 @@ function ImageTransform({ image, token, onClose, onTransformed }) {
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      setMessage('Transformation applied successfully!');
-      if (onTransformed) onTransformed();
+      setMessage(`Transformation applied successfully! File size: ${(response.data.fileSize / 1024).toFixed(1)} KB`);
+      setTransformedImage(response.data);
+      if (onTransformed) onTransformed(response.data);
     } catch (error) {
       setMessage('Transformation failed: ' + (error.response?.data || error.message));
     } finally {
@@ -99,6 +101,27 @@ function ImageTransform({ image, token, onClose, onTransformed }) {
       filters: { grayscale: false, sepia: false }
     });
     setMessage('');
+    setTransformedImage(null);
+  };
+
+  const handleDownloadTransformedImage = async (transformedImageData) => {
+    try {
+      const response = await axios.get(`/images/transformed-images/${transformedImageData.transformedImageId}/download-url`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      // Create a temporary anchor element to trigger download
+      const link = document.createElement('a');
+      link.href = response.data.downloadUrl;
+      link.download = transformedImageData.transformedFilename || 'transformed-image';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      setMessage('Download started successfully!');
+    } catch (error) {
+      setMessage('Download failed: ' + (error.response?.data || error.message));
+    }
   };
 
   return (
@@ -287,6 +310,72 @@ function ImageTransform({ image, token, onClose, onTransformed }) {
             </div>
           </div>
         </div>
+
+        {/* Transformed Image Result */}
+        {transformedImage && (
+          <div style={{ marginTop: '20px', padding: '15px', border: '2px solid #28a745', borderRadius: '8px', backgroundColor: '#f8fff9' }}>
+            <h4 style={{ color: '#28a745', marginTop: 0 }}>Transformation Complete!</h4>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', alignItems: 'center' }}>
+              <div>
+                <img 
+                  src={transformedImage.transformedUrl} 
+                  alt="Transformed"
+                  style={{ 
+                    width: '100%', 
+                    height: '150px', 
+                    objectFit: 'contain',
+                    border: '1px solid #ddd',
+                    borderRadius: '4px'
+                  }}
+                  onError={(e) => {
+                    console.warn('Failed to load transformed image preview');
+                    e.target.style.display = 'none';
+                    e.target.nextSibling.style.display = 'flex';
+                  }}
+                />
+                <div 
+                  style={{ 
+                    width: '100%', 
+                    height: '150px', 
+                    backgroundColor: '#f8f9fa',
+                    borderRadius: '4px',
+                    display: 'none',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    border: '2px dashed #dee2e6',
+                    color: '#6c757d'
+                  }}
+                >
+                  <div style={{ fontSize: '24px', marginBottom: '8px' }}>🎨</div>
+                  <div style={{ fontSize: '12px', textAlign: 'center' }}>
+                    Preview not available<br/>
+                    (Image ready for download)
+                  </div>
+                </div>
+              </div>
+              <div>
+                <p><strong>File:</strong> {transformedImage.transformedFilename}</p>
+                <p><strong>Size:</strong> {(transformedImage.fileSize / 1024).toFixed(1)} KB</p>
+                <button
+                  onClick={() => handleDownloadTransformedImage(transformedImage)}
+                  style={{
+                    display: 'inline-block',
+                    padding: '8px 16px',
+                    backgroundColor: '#28a745',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    marginTop: '10px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Download Transformed Image
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Action Buttons */}
         <div style={{ display: 'flex', gap: '10px', marginTop: '20px', justifyContent: 'flex-end' }}>

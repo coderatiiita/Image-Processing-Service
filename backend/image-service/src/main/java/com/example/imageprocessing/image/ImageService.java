@@ -50,7 +50,7 @@ public class ImageService {
 
     public Image upload(MultipartFile file, String username) throws IOException {
         // Get user ID
-        Long userId = userRepository.findByUsername(username)
+        Long userId = userRepository.findFirstByUsername(username)
                 .orElseThrow(() -> new RuntimeException("User not found"))
                 .getId();
 
@@ -79,21 +79,21 @@ public class ImageService {
     }
 
     public List<Image> getUserImages(String username) {
-        Long userId = userRepository.findByUsername(username)
+        Long userId = userRepository.findFirstByUsername(username)
                 .orElseThrow(() -> new RuntimeException("User not found"))
                 .getId();
         return imageRepository.findByUserId(userId);
     }
 
     public Page<Image> getUserImages(String username, Pageable pageable) {
-        Long userId = userRepository.findByUsername(username)
+        Long userId = userRepository.findFirstByUsername(username)
                 .orElseThrow(() -> new RuntimeException("User not found"))
                 .getId();
         return imageRepository.findByUserId(userId, pageable);
     }
 
     public Optional<Image> getImageById(Long imageId, String username) {
-        Long userId = userRepository.findByUsername(username)
+        Long userId = userRepository.findFirstByUsername(username)
                 .orElseThrow(() -> new RuntimeException("User not found"))
                 .getId();
         return imageRepository.findByIdAndUserId(imageId, userId);
@@ -101,7 +101,7 @@ public class ImageService {
 
     public String generatePresignedUploadUrl(String filename, String contentType, String username) {
         // Get user ID to ensure authorization (don't store in metadata for pre-signed URLs)
-        userRepository.findByUsername(username)
+        userRepository.findFirstByUsername(username)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
         // Generate unique filename
@@ -163,7 +163,7 @@ public class ImageService {
     
     private String generatePresignedUploadUrlWithFilename(String uniqueFilename, String contentType, String username) {
         // Get user ID to ensure authorization
-        userRepository.findByUsername(username)
+        userRepository.findFirstByUsername(username)
                 .orElseThrow(() -> new RuntimeException("User not found"));
         
         logger.info("Generating pre-signed upload URL for file: {} with content-type: {} in bucket: {} region: {}", 
@@ -188,7 +188,7 @@ public class ImageService {
 
 
     public Image saveImageMetadata(String filename, String originalName, String contentType, Long fileSize, String username) {
-        Long userId = userRepository.findByUsername(username)
+        Long userId = userRepository.findFirstByUsername(username)
                 .orElseThrow(() -> new RuntimeException("User not found"))
                 .getId();
 
@@ -220,6 +220,37 @@ public class ImageService {
             return String.format("https://%s.s3.amazonaws.com/%s", bucket, filename);
         } else {
             return String.format("https://%s.s3.%s.amazonaws.com/%s", bucket, region, filename);
+        }
+    }
+
+    public void deleteImage(Long imageId, String username) {
+        // Get user ID and verify ownership
+        Long userId = userRepository.findFirstByUsername(username)
+                .orElseThrow(() -> new RuntimeException("User not found"))
+                .getId();
+        
+        // Find the image and verify ownership
+        Image image = imageRepository.findByIdAndUserId(imageId, userId)
+                .orElseThrow(() -> new RuntimeException("Image not found or access denied"));
+        
+        try {
+            // Delete from S3
+            software.amazon.awssdk.services.s3.model.DeleteObjectRequest deleteRequest = 
+                software.amazon.awssdk.services.s3.model.DeleteObjectRequest.builder()
+                    .bucket(bucket)
+                    .key(image.getFilename())
+                    .build();
+            
+            s3Client.deleteObject(deleteRequest);
+            logger.info("Deleted image from S3: {}", image.getFilename());
+            
+            // Delete from database
+            imageRepository.delete(image);
+            logger.info("Deleted image from database: {} (ID: {})", image.getOriginalName(), imageId);
+            
+        } catch (Exception e) {
+            logger.error("Failed to delete image: {} (ID: {})", image.getFilename(), imageId, e);
+            throw new RuntimeException("Failed to delete image: " + e.getMessage());
         }
     }
 

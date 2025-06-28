@@ -4,4 +4,8 @@ backend/image-service/target/
 
 .DS_STORE
 
-Claude.md
+CLAUDE.md
+.vscode
+.claude
+
+*.log
