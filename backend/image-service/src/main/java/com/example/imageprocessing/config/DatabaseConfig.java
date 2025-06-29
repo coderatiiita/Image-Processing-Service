@@ -22,27 +22,35 @@ public class DatabaseConfig {
             throw new RuntimeException("DATABASE_URL environment variable is not set");
         }
 
-        // Transform postgresql:// to jdbc:postgresql://
-        String jdbcUrl;
-        if (databaseUrl.startsWith("postgresql://")) {
-            jdbcUrl = "jdbc:" + databaseUrl;
-        } else if (databaseUrl.startsWith("jdbc:postgresql://")) {
-            jdbcUrl = databaseUrl;
-        } else {
-            throw new RuntimeException("Unsupported database URL format: " + databaseUrl);
+        try {
+            // Parse the DATABASE_URL
+            java.net.URI uri = new java.net.URI(databaseUrl);
+            
+            String host = uri.getHost();
+            int port = uri.getPort() == -1 ? 5432 : uri.getPort(); // Default PostgreSQL port
+            String database = uri.getPath().substring(1); // Remove leading '/'
+            String username = uri.getUserInfo().split(":")[0];
+            String password = uri.getUserInfo().split(":")[1];
+            
+            // Build JDBC URL with proper format
+            String jdbcUrl = String.format("jdbc:postgresql://%s:%d/%s", host, port, database);
+            
+            HikariConfig config = new HikariConfig();
+            config.setJdbcUrl(jdbcUrl);
+            config.setUsername(username);
+            config.setPassword(password);
+            config.setDriverClassName("org.postgresql.Driver");
+            
+            // Optional: Set connection pool settings
+            config.setMaximumPoolSize(10);
+            config.setMinimumIdle(2);
+            config.setConnectionTimeout(30000);
+            config.setIdleTimeout(600000);
+            config.setMaxLifetime(1800000);
+
+            return new HikariDataSource(config);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to parse DATABASE_URL: " + e.getMessage(), e);
         }
-
-        HikariConfig config = new HikariConfig();
-        config.setJdbcUrl(jdbcUrl);
-        config.setDriverClassName("org.postgresql.Driver");
-        
-        // Optional: Set connection pool settings
-        config.setMaximumPoolSize(10);
-        config.setMinimumIdle(2);
-        config.setConnectionTimeout(30000);
-        config.setIdleTimeout(600000);
-        config.setMaxLifetime(1800000);
-
-        return new HikariDataSource(config);
     }
 }
