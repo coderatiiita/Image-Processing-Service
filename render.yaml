@@ -1,10 +1,10 @@
 services:
-  # Backend Spring Boot Service
+  # Backend Spring Boot Service (Docker)
   - type: web
     name: imagegenie-backend
-    env: java
-    buildCommand: cd backend/image-service && mvn clean package -DskipTests
-    startCommand: cd backend/image-service && java -jar target/image-service-0.0.1-SNAPSHOT.jar
+    env: docker
+    dockerfilePath: ./backend/image-service/Dockerfile
+    dockerContext: ./backend/image-service
     plan: free
     healthCheckPath: /actuator/health
     envVars:
@@ -35,12 +35,12 @@ services:
       - key: JWT_SECRET
         generateValue: true
 
-  # Frontend React Service
+  # Frontend React Service (Docker)
   - type: web
     name: imagegenie-frontend
-    env: node
-    buildCommand: npm install && npm run build
-    startCommand: npx serve -s build -p 10000
+    env: docker
+    dockerfilePath: ./frontend/Dockerfile
+    dockerContext: ./frontend
     plan: free
     envVars:
       - key: REACT_APP_API_URL

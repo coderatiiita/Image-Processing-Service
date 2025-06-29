@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  # Database
+  mysql:
+    image: mysql:8.0
+    container_name: imagegenie-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: images
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+
+  # Backend
+  backend:
+    build:
+      context: ./backend/image-service
+      dockerfile: Dockerfile
+    container_name: imagegenie-backend
+    environment:
+      - SPRING_PROFILES_ACTIVE=development
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/images
+      - SPRING_DATASOURCE_USERNAME=root
+      - SPRING_DATASOURCE_PASSWORD=root
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION=${AWS_REGION:-ap-south-1}
+      - AWS_S3_BUCKET=${AWS_S3_BUCKET:-project-image-processing-service-bucket}
+      - JWT_SECRET=${JWT_SECRET:-your-secret-key-here}
+      - SERVER_PORT=8080
+    ports:
+      - "8080:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    volumes:
+      - ./backend/image-service:/app
+    command: ["java", "-jar", "target/image-service-0.0.1-SNAPSHOT.jar"]
+
+  # Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: imagegenie-frontend
+    environment:
+      - REACT_APP_API_URL=http://localhost:8080
+    ports:
+      - "3000:10000"
+    depends_on:
+      - backend
+
+volumes:
+  mysql_data:
